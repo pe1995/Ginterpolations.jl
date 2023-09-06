@@ -307,3 +307,5 @@ gevaluate(grid_in, grid_out, values, args...; kwargs...)  = begin
     ip = ginterpolate(grid_in, grid_out)
     gevaluate!(ip, values, args...; kwargs...)
 end
+
+(ip::GridInterpolation)(args...; kwargs...) = gevaluate!(ip, args...; kwargs...)
