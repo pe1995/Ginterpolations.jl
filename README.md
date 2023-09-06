@@ -1,3 +1,3 @@
-# Ginterpolations
+# Ginterpolations.jl
 
 [![Build Status](https://github.com/pe1995/Ginterpolations.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/pe1995/Ginterpolations.jl/actions/workflows/CI.yml?query=branch%3Amain)
