@@ -14,6 +14,6 @@ function scale_axis(axis; factor=nothing, N=nothing)
         N
     end
 
-	axis_new = range(first(axis), last(axis), length=len)
+	axis_new = range(minimum(axis), maximum(axis), length=len)
 	Base.convert.(eltype(axis), axis_new)
 end

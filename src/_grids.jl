@@ -6,7 +6,9 @@
 Regular Box Axis constructed from 1D array of axis nodes.
 """
 struct RegularBoxAxis{T} <: AbstractBoxAxis
-    nodes::Vector{T}
+    nodes    ::Vector{T}
+    sorted   ::Bool
+    sortmask ::Vector{Int64}
 end
 
 """
@@ -27,20 +29,26 @@ RegularBoxGrid(axes::AbstractBoxAxis...) = RegularBoxGrid([axes...])
 RegularBoxGrid(axes::AbstractArray{T,1}...) where {T<:AbstractFloat} = begin
     RegularBoxGrid(RegularBoxAxis.(axes))
 end
-RegularBoxAxis(values)  = if is_uniform(values)
+#=RegularBoxAxis(values)  = if is_uniform(values)
     RegularBoxAxis(flipped(values))
 else
     @warn "Non-uniform spacing detected."
     RegularBoxAxis(flipped(values))
-end
+end=#
 
+RegularBoxAxis(values) = RegularBoxAxis(sort(values), issorted(values), sortperm(values))
 Grid(ax::AbstractVector...) = RegularBoxGrid(RegularBoxAxis.(ax)...)
 
 
 
 
 
+
+
+
 #= Utilities =#
+
+permutation(a::RegularBoxAxis) = a.sortmask
 
 """
     is_uniform(values)
@@ -66,5 +74,11 @@ flipped(values) = begin
 end
 
 nodes(axis::AbstractBoxAxis) = axis.nodes
-nodes(axis::RegularBoxGrid)  = [nodes(a) for a in axis]
-axis(g::RegularBoxGrid)      = g.axes
+nodes(axis::RegularBoxGrid) = [nodes(a) for a in axis]
+axis(g::RegularBoxGrid) = g.axes
+
+function scale(arr, a, b)
+    min_val = minimum(arr)
+    max_val = maximum(arr)
+    a .+ (arr .- min_val) .* (b .- a) ./ (max_val .- min_val)
+end
