@@ -55,7 +55,6 @@ GridInterpolation(from::Vector{<:AbstractBoxAxis}, to::Vector{<:AbstractBoxAxis}
     interpolators = AxisInterpolation.(from, to; method=method)
 
     initial_size = [length(nodes(interpolators[i].old_axis)) for i in eachindex(interpolators)]
-    #append!(buffers, [similar(interpolators[1].weights, initial_size...)])
     buffers = [similar(interpolators[1].weights, initial_size...)]
 
     s_old = (length(nodes(f)) for f in from) |> collect
@@ -81,6 +80,7 @@ end
 
 
 #= General convenience =#
+
 fromaxis(ip::AxisInterpolation) = ip.old_axis
 toaxis(ip::AxisInterpolation) = ip.new_axis
 
@@ -165,18 +165,6 @@ Monotonic piecewise cubic hermite interpolation
 Coded by Richard Hoppe, July 2023
 """
 function pchip_mono8!(newy, yy, newx, xx)
-    # real(8), intent(in) :: xx(:)            # X values of the data points
-    # real,    intent(in) :: yy(:)            # Y values of the data points
-    # real(8), intent(in) :: newx(:)          # X values to interpolate at
-    # real,    intent(out) :: newy(:)         # Interpolated Y values
-    # real(8), allocatable :: dydx(:)         # derivative
-    # real(8), allocatable :: dx(:)
-    # real(8), allocatable :: dy(:)
-    # integer :: n                 ! Number of data points
-    # integer :: n_interp          ! Number of interpolation points
-    # integer :: j                 ! Loop index for interpolation points
-    # integer :: i                 ! Loop index for data points
-    # real(8) :: d1, d2, d, alpha, t1, t2, t3, p, a
     n = length(xx)
     n_interp = length(newx)
 
@@ -241,15 +229,25 @@ Intermediate results are saved and in the buffers, which will be re-used
 upon a second visit of this function. A copy of the result is returned, unless
 requested otherwise.
 """
-function interpolate_grid!(ip::GridInterpolation, values; return_copy=false)
-    #idx = zeros(Int, length(ip.axes_interpolation))
+interpolate_grid!(ip::GridInterpolation, values; return_copy=false) = begin
     buffers = ip.buffers
     buffers[1] .= values
+    result = interpolate_grid!(ip, buffers, values)
+    return_copy ? deepcopy(result) : result
+end   
 
+# stateless version that is threadsafe
+interpolate_grid(ip::GridInterpolation, values) = begin
+    buffers = deepcopy(ip.buffers)
+    buffers[1] .= values
+    interpolate_grid!(ip, buffers, values)
+end 
+
+function interpolate_grid!(ip::GridInterpolation, buffers, values)
     for i in eachindex(ip.axes_interpolation)
         # For each interpolation axis (x, y, z, etc.)
         dim_selection = (j==i ? 1 : Base.Colon() for j in eachindex(ip.axes_interpolation)) |> collect
-        c = CartesianIndices(view(ip.buffers[i], dim_selection...))
+        c = CartesianIndices(view(buffers[i], dim_selection...))
         for ci in c
             # Now we loop through all other dimensions, and pick the axis
             # we are currently interpolating
@@ -275,8 +273,8 @@ function interpolate_grid!(ip::GridInterpolation, values; return_copy=false)
         end
     end
 
-    return_copy ? deepcopy(buffers[end]) : buffers[end]
-end    
+    buffers[end]
+end
 
 function _fill_index(to_fill, cartesian, at)
     new_index = Any[Base.Colon(), Tuple(cartesian)...]
