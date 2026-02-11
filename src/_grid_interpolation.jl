@@ -245,35 +245,25 @@ end
 
 function interpolate_grid!(ip::GridInterpolation, buffers, values)
     for i in eachindex(ip.axes_interpolation)
-        # For each interpolation axis (x, y, z, etc.)
-        dim_selection = (j==i ? 1 : Base.Colon() for j in eachindex(ip.axes_interpolation)) |> collect
-        c = CartesianIndices(view(buffers[i], dim_selection...))
-        for ci in c
-            # Now we loop through all other dimensions, and pick the axis
-            # we are currently interpolating
-            idx_from = _fill_index(permutation(fromaxis(ip.axes_interpolation[i])), ci, i)
-            idx_to = _fill_index(permutation(toaxis(ip.axes_interpolation[i])), ci, i)
-            if method(ip.axes_interpolation[i]) == :linear
-                interpolate_axis!(  
-                    @view(buffers[i+1][idx_to...]),
-                    @view(buffers[i][idx_from...]),
-                    ip.axes_interpolation[i].weights,
-                    ip.axes_interpolation[i].indices
-                )
-            elseif method(ip.axes_interpolation[i]) == :pchip
-                pchip_mono8!(  
-                    @view(buffers[i+1][idx_to...]),
-                    @view(buffers[i][idx_from...]),
-                    nodes(ip.axes_interpolation[i].new_axis),
-                    nodes(ip.axes_interpolation[i].old_axis)
-                )
-            else
-                error("Interpolation method not recognized. Pick :linear or :pchip")
-            end
+        in_buf = buffers[i]
+        out_buf = buffers[i+1]
+        
+        axis_interp = ip.axes_interpolation[i]
+        
+        if method(axis_interp) == :linear
+            _interpolate_linear_kernel!(
+                out_buf, 
+                in_buf, 
+                axis_interp.weights, 
+                axis_interp.indices, 
+                Val(i) 
+            )
+        else
+            _interpolate_slice_fallback!(out_buf, in_buf, axis_interp, Val(i))
         end
     end
 
-    buffers[end]
+    return buffers[end]
 end
 
 function _fill_index(to_fill, cartesian, at)
@@ -288,6 +278,20 @@ function _fill_index(to_fill, cartesian, at)
         end
     end
     new_index
+end
+
+function _interpolate_linear_kernel!(out, in, weights, indices, ::Val{Dim}) where Dim
+    @inbounds for I in CartesianIndices(out)
+        idx_new = I[Dim]
+        w1 = weights[idx_new, 1]
+        w2 = weights[idx_new, 2]
+        base_idx = indices[idx_new]
+       
+        idx_left  = Base.setindex(I.I, base_idx, Dim)
+        idx_right = Base.setindex(I.I, base_idx + 1, Dim)
+        
+        out[I] = w1 * in[idx_left...] + w2 * in[idx_right...]
+    end
 end
 
 
